@@ -19,15 +19,29 @@ import math
 #The emission shader should get it's color from the texture colors aka diffuse
 def GetCharAnimFramesSize():
     return 12
+def ObjectAnimations(self, context):
+    l=[]
 
+    if context.scene.objectToRotate:
+        for i in range(0,bpy.data.actions.size()):
+            l.append(i,context.scene.objectToRotate.actions[i],"")
+        return bpy.data.actions
+    else:
+        return {'no','no','no'}
 #https://stackoverflow.com/questions/14982836/rendering-and-saving-images-through-blender-python
 def rotate_and_render(output_dir, rotation_angle = 360.0):
     import os
-    subject= bpy.context.scene.objectToRotate
+    if bpy.context.scene.objectEmpty:
+        subject=bpy.context.scene.objectEmpty
+    else:
+        subject= bpy.context.scene.objectToRotate
     subject.rotation_euler=(0,0,0)
     chosenAnim=GetCurrentAnimationData(bpy.context.scene)
     rotationSteps=int(chosenAnim.charAngles)
     bpy.context.scene.render.film_transparent = True
+    firstLetter=ord(chosenAnim.startFrameLetter.upper())
+    
+    print(firstLetter)
     for aframe in range(0,GetCharAnimFramesSize()):
         if chosenAnim.charAnimFrames[aframe]==-1:
             continue
@@ -35,7 +49,7 @@ def rotate_and_render(output_dir, rotation_angle = 360.0):
         bpy.context.scene.camera.location=chosenAnim.camPosition
         for step in range(0, rotationSteps):
             rotationName=""
-            aframeName=chr(65+aframe)
+            aframeName=chr(firstLetter+aframe)
             if rotationSteps==1:
                 rotationName=0
             elif rotationSteps==8:
@@ -102,29 +116,36 @@ def DrawAnimationSelectUI(layout,animUI):
     col = layout.column()
     row=layout.row()
     col.prop(animUI,"animBaseName")
+    col.prop(animUI,"startFrameLetter")
+    #col.prop(animUI,"animationToSelect")
     col.prop(animUI,"camPosition")
     col.prop(animUI,"charAngles")
     row.prop(animUI,"charAnimFrames")
+    
 
 class OBJECT_OT_SetCamPos(bpy.types.Operator):
     bl_idname = "object.setcamposbutton"
-    bl_label = "Set data for cam position"
+    bl_label = "Set Cam Position"
+    bl_description="Set the render position data for the camera for this animation"
+
     def execute(self, context):
         obj = context.object
         chosenAnim=GetCurrentAnimationData(context.scene)
         chosenAnim.camPosition=bpy.context.scene.camera.location
         return {'FINISHED'}
 
-class OBJECT_OT_removelistitem(bpy.types.Operator):
-    bl_idname = "object.removelistitem"
-    bl_label = "Remove Item"
-
-    idx: bpy.props.IntProperty(default=-1)
+class OBJECT_OT_GiveEmptyParentToObject(bpy.types.Operator):
+    bl_idname = "object.giveemptyparenttoobject"
+    bl_label = "OBJ Into Empty"
+    bl_description="Put 'Object To Rotate' into an empty"
 
     def execute(self, context):
-        obj = context.object
-        if self.idx >= 0:
-            obj.test_settings.remove(self.idx)
+        obj= context.scene.objectToRotate
+        
+        bpy.ops.object.empty_add(type="PLAIN_AXES", location=obj.location)
+        context.scene.objectEmpty = bpy.context.view_layer.objects.active
+        obj.parent=context.scene.objectEmpty
+        obj.location = (0, 0, 0)
         return {'FINISHED'}
 
 
@@ -142,42 +163,10 @@ class ObjectsDropDown(bpy.types.Operator) :
  
         return {"FINISHED"}  
  
-class DSMDataProperties(bpy.types.PropertyGroup):
-    
-    camPosition:bpy.props.FloatVectorProperty(
-        name="Camera Position",
-        size=3,
-        default=(0.0,0.0,0.0),
-        min=(-20.0),
-        max=(20.0))
-        #1 2 4 5 8 name Angles
-    charAngles: bpy.props.EnumProperty(
-        items=[
-            ('1',"1","1 angle sprite"),
-            ('4',"4","4 angles sprite"),
-            ('5',"5","5 angles sprite"),
-            ('8',"8","8 angles sprite"),
-        ],
-        name="Angle count",
-        description="Select angle count"
-    )
-    animBaseName: bpy.props.StringProperty(
-        name="Base sprite name",
-        description="The first 4 letters of the name of the sprite.",
-        maxlen=4,
-        default="TNT1")
-
-    charAnimFrames:bpy.props.IntVectorProperty(
-        size=GetCharAnimFramesSize(),
-        name="Frames",
-        description="Select the animation frames which you want to make sprites from. Each number represents a frame for an animation. Go from left to right. -1 means no sprite will be made. ",
-        min=(-1),
-        default=[(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1)])
-
-
 class OBJECT_OT_DoomSpriteMakerData(bpy.types.Operator):
     bl_idname = "object.doom_sprite_maker"
-    bl_label = "Make Sprites For The Selected Animation"
+    bl_label = "Make Sprites For This Animation"
+    bl_description="Starts rendering the sprites for the selected animation"
     bl_options = {'REGISTER', 'UNDO'}
     
 #    def SetCameraDistance(self,value):
@@ -216,18 +205,26 @@ class OBJECT_PT_DoomSpriteMakerData(bpy.types.Panel):
         op = context.active_operator
         layout = self.layout
         col = layout.column()
+        row = layout.row()
         #dataListItems = col.operator('object.adddoomdatalistitem')
-        spriteMaker = col.operator('object.doom_sprite_maker')
-        col.operator('object.setcamposbutton')
+        col = layout.column()
+
+        row.operator('object.giveemptyparenttoobject')
+        row.operator('object.setcamposbutton')
+        col = layout.column()
+        row = layout.row()
         
         #dropDown= col.operator('mesh.objectsdropdown')
         #dropDown.objname
         
         #context.Scene.dsmData; 
         #context.Scene.numOfAnims
-        col.prop(context.scene,"objectToRotate")
+        row.prop(context.scene,"objectToRotate")
+        row.prop(context.scene,"objectEmpty")
+        
         col.prop(context.scene,"renderLocation")
         col.prop(context.scene, "animToChoose")
+        col.operator('object.doom_sprite_maker')
         
         #Move animation selected
         chosenAnim=GetCurrentAnimationData(context.scene)
@@ -240,13 +237,56 @@ class OBJECT_PT_DoomSpriteMakerData(bpy.types.Panel):
         #props.cameraDistance = context.scene.cameraDistance
         #props.charAngles = context.scene.charAngles
         #props.charAnimFrames = context.scene.charAnimFrames
+
+
+class DSMDataProperties(bpy.types.PropertyGroup):
+    
+    camPosition:bpy.props.FloatVectorProperty(
+        name="Camera Position",
+        size=3,
+        default=(0.0,0.0,0.0),
+        min=(-20.0),
+        max=(20.0))
+        #1 2 4 5 8 name Angles
+    charAngles: bpy.props.EnumProperty(
+        items=[
+            ('1',"1","1 angle sprite"),
+            ('4',"4","4 angles sprite"),
+            ('5',"5","5 angles sprite"),
+            ('8',"8","8 angles sprite"),
+        ],
+        name="Angle Count",
+        description="Select angle count"
+    )
+    animBaseName: bpy.props.StringProperty(
+        name="Base Sprite Name",
+        description="The first 4 letters of the name of the sprite.",
+        maxlen=4,
+        default="TNT1")
+    startFrameLetter: bpy.props.StringProperty(
+        name="Start Frame Letter",
+        description="The program starts naming the frame letters from here aka in TNT1A it's the letter A.",
+        maxlen=1,
+        default="A")
+
+    charAnimFrames:bpy.props.IntVectorProperty(
+        size=GetCharAnimFramesSize(),
+        name="Frames",
+        description="Select the animation frames which you want to make sprites from. Each number represents a frame for an animation. Go from left to right. -1 means no sprite will be made. ",
+        min=(-1),
+        default=[(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1),(-1)])
+    #animationToSelect:bpy.props.EnumProperty(items=ObjectAnimations,name="Animation to use",description="Choose animation to use.") 
+    
+    #bpy.context.selected_objects[0].animation_data.action = bpy.data.actions[0]
+    #object.animation_data.action = the_action
+    
 classes = [
     DSMDataProperties,
     ObjectsDropDown,
     OBJECT_OT_DoomSpriteMakerData,
     OBJECT_PT_DoomSpriteMakerData,
     OBJECT_OT_SetCamPos,
-    OBJECT_OT_removelistitem,
+    OBJECT_OT_GiveEmptyParentToObject,
     ]
 def register():
     print("doing stuff")
@@ -255,6 +295,10 @@ def register():
     #bpy.types.Object.test_settings = bpy.props.CollectionProperty(type=OBJECT_PG_test)
     bpy.types.Scene.renderLocation= bpy.props.StringProperty(name="Render location",description="ex: D:\\Folder1\\Folder2")
     bpy.types.Scene.objectToRotate= bpy.props.PointerProperty(type=bpy.types.Object, name="Object To Rotate")
+    bpy.types.Scene.objectEmpty= bpy.props.PointerProperty(
+        type=bpy.types.Object, 
+        name="Empty For The Object",
+        description="This is here if you need an empty for your object. Leaving this to be editable so if it contains wrong data you can change it manually.")
 
     bpy.types.Scene.moveAnimData = bpy.props.PointerProperty(type=DSMDataProperties) 
     bpy.types.Scene.idleAnimData = bpy.props.PointerProperty(type=DSMDataProperties) 
