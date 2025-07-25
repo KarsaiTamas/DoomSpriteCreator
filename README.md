@@ -1,6 +1,7 @@
 # DoomSpriteCreator
-This is a blender addon to make sprites easier from your blender models for doom.
+For those who don't use github. To download it click code and click download zip. The python file is inside if blender can't recognize it with the zip file.
 WIP
+This is a blender addon to make sprites easier from your blender models for doom.
 
 This will have more options, just this is the first mostly properly working version 
 and just want to save it to github, for good mesure.
